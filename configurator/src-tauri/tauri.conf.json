@@ -31,7 +31,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [],
     "copyright": "2024 CrisTecnica",
     "category": "Music",
     "shortDescription": "Configurador do BluePill MIDI Trigger",
@@ -45,27 +44,15 @@
       },
       "appimage": {
         "bundleMediaFramework": false
-      },
-      "desktopTemplate": "linux/bluepill-midi-trigger.desktop"
+      }
     },
     "windows": {
-      "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
-      "timestampUrl": "",
       "nsis": {
         "displayLanguageSelector": false,
         "languages": ["Portuguese"],
         "installerIcon": "icons/icon.ico",
-        "headerImage": null,
-        "sidebarImage": null,
-        "installMode": "perMachine",
-        "shortcutName": "BluePill MIDI Trigger",
-        "createDesktopShortcut": true,
-        "createStartMenuShortcut": true,
-        "perMachineInstallMode": true
-      },
-      "wix": {
-        "language": "pt-BR"
+        "installMode": "perMachine"
       }
     }
   }
