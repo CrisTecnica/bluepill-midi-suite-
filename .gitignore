@@ -1,0 +1,12 @@
+# Firmware
+firmware/.pio/
+
+# Configurador — dependências e builds
+configurator/node_modules/
+configurator/dist/
+configurator/src-tauri/target/
+configurator/src-tauri/gen/
+
+# Android/iOS gerados pelo tauri icon
+configurator/src-tauri/icons/android/
+configurator/src-tauri/icons/ios/

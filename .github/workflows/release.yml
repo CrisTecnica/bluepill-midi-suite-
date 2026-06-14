@@ -1,0 +1,94 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            args: '--target x86_64-unknown-linux-gnu'
+          - platform: windows-latest
+            args: '--target x86_64-pc-windows-msvc'
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: configurator/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'x86_64-unknown-linux-gnu' }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libudev-dev
+
+      - name: Install frontend dependencies
+        working-directory: configurator
+        run: npm ci
+
+      - name: Build Tauri app (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: configurator
+          args: ${{ matrix.args }}
+          tagName: ${{ github.ref_name }}
+          releaseName: 'BluePill MIDI Trigger ${{ github.ref_name }}'
+          releaseBody: |
+            ## Instalação
+
+            ### Linux
+            - **`.deb`** (Ubuntu/Debian): `sudo dpkg -i bluepill-midi-trigger_*.deb`
+              - Instala udev rule e adiciona usuário ao grupo `dialout` automaticamente
+            - **`.AppImage`**: torne executável e abra — sem instalação necessária
+              - Permissão manual: `sudo usermod -aG dialout $USER` + logout/login
+
+            ### Windows
+            - **`.msi`** ou **`.exe`**: execute como Administrador
+              - Instala driver USB CDC (se necessário) e cria atalho na área de trabalho
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: false
+
+      - name: Build Tauri app (Windows)
+        if: matrix.platform == 'windows-latest'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: configurator
+          args: ${{ matrix.args }}
+          tagName: ${{ github.ref_name }}
+          releaseName: 'BluePill MIDI Trigger ${{ github.ref_name }}'
+          releaseBody: |
+            ## Instalação Windows
+            Execute o instalador `.exe` ou `.msi` como Administrador.
+            Cria atalho na área de trabalho e menu iniciar automaticamente.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: false

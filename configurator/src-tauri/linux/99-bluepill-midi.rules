@@ -1,0 +1,4 @@
+# BluePill MIDI Trigger — acesso à porta CDC sem sudo
+# Instalado automaticamente pelo pacote BluePill MIDI Trigger
+ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5700", ENV{ID_MM_DEVICE_IGNORE}="1", MODE="0660", GROUP="dialout"
+ATTRS{idVendor}=="1eaf", ATTRS{idProduct}=="0024", ENV{ID_MM_DEVICE_IGNORE}="1", MODE="0660", GROUP="dialout"

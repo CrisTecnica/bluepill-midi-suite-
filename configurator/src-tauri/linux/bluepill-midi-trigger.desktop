@@ -1,0 +1,9 @@
+[Desktop Entry]
+Categories=Audio;Music;
+Comment=Configurador do BluePill MIDI Trigger
+Exec=bluepill-midi-trigger
+Icon=bluepill-midi-trigger
+Name=BluePill MIDI Trigger
+StartupWMClass=BluePill MIDI Trigger
+Terminal=false
+Type=Application

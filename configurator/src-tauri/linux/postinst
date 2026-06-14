@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+# Recarrega regras udev para o BluePill MIDI Trigger
+udevadm control --reload-rules 2>/dev/null || true
+udevadm trigger 2>/dev/null || true
+
+# Adiciona o usuário atual ao grupo dialout (acesso à porta serial)
+REAL_USER="${SUDO_USER:-$USER}"
+if [ -n "$REAL_USER" ] && [ "$REAL_USER" != "root" ]; then
+    if ! groups "$REAL_USER" | grep -q dialout; then
+        usermod -aG dialout "$REAL_USER"
+        echo "Usuário '$REAL_USER' adicionado ao grupo dialout."
+        echo "Faça logout e login novamente para que a permissão entre em vigor."
+    fi
+fi
