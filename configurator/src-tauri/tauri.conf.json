@@ -38,7 +38,6 @@
     "linux": {
       "deb": {
         "depends": [],
-        "postinstScript": "linux/postinst",
         "files": {
           "/etc/udev/rules.d/99-bluepill-midi.rules": "linux/99-bluepill-midi.rules"
         }
