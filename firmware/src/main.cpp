@@ -29,7 +29,6 @@
 const uint8 PAD_PIN[NUM_PADS] = { PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7 };
 
 // ---------------- Configuração em runtime ----------------
-// Apenas uint16: o struct é gravado palavra a palavra na flash.
 struct Config {
   uint16 th[NUM_PADS];    // threshold de disparo (0..4095)
   uint16 note[NUM_PADS];  // nota MIDI (0..127)
@@ -55,13 +54,15 @@ static void cfgDefaults() {
 }
 
 // ---------------- Persistência (flash, EEPROM emulada) ----------------
-// F103C8 (medium density): páginas de 1KB; usa as duas últimas dos 64KB.
-static void cfgSave() {
+// NOTA: PageBase deve ficar fora da região de código (inicializado após USB)
+static bool cfgSave() {
   const uint16 *w = (const uint16 *)&cfg;
   const int n = sizeof(Config) / 2;
-  EEPROM.write(0, CFG_MAGIC);
-  EEPROM.write(1, CFG_VERSION);
-  for (int i = 0; i < n; i++) EEPROM.write(2 + i, w[i]);
+  if (EEPROM.write(0, CFG_MAGIC)   != EEPROM_OK) return false;
+  if (EEPROM.write(1, CFG_VERSION) != EEPROM_OK) return false;
+  for (int i = 0; i < n; i++)
+    if (EEPROM.write(2 + i, w[i]) != EEPROM_OK) return false;
+  return true;
 }
 
 static bool cfgLoad() {
@@ -94,6 +95,7 @@ struct Pad {
 Pad pads[NUM_PADS];
 bool   monitor    = false;
 uint32 ledOffAtMs = 0;
+uint32 lastHbMs   = 0;
 
 static uint8 peakToVelocity(uint16 peak, uint16 threshold) {
   if (peak <= threshold) return 1;
@@ -131,7 +133,11 @@ static void sendConfig() {
 
 static void handleLine(char *buf) {
   if (!strcmp(buf, "GET"))  { sendConfig(); return; }
-  if (!strcmp(buf, "SAVE")) { cfgSave(); CompositeSerial.print("{\"ok\":\"saved\"}\n"); return; }
+  if (!strcmp(buf, "SAVE")) {
+    if (cfgSave()) CompositeSerial.print("{\"ok\":\"saved\"}\n");
+    else           CompositeSerial.print("{\"err\":\"flash\"}\n");
+    return;
+  }
   if (!strncmp(buf, "MON ", 4)) { monitor = (buf[4] == '1'); return; }
 
   if (!strncmp(buf, "SET ", 4)) {
@@ -158,7 +164,7 @@ static void pollSerial() {
     } else if (rxLen < sizeof(rxBuf) - 1) {
       rxBuf[rxLen++] = c;
     } else {
-      rxLen = 0;  // overflow: descarta a linha
+      rxLen = 0;
     }
   }
 }
@@ -171,20 +177,30 @@ void setup() {
     pads[i].noteOn = false;
   }
   pinMode(PC13, OUTPUT);
-  digitalWrite(PC13, HIGH);  // LED apagado (ativo em LOW)
+  digitalWrite(PC13, HIGH);
 
-  // EEPROM emulada nas duas últimas páginas dos 64KB (páginas de 1KB)
-  EEPROM.PageBase0 = 0x0800F800;
-  EEPROM.PageBase1 = 0x0800FC00;
-  EEPROM.PageSize  = 0x400;
-  EEPROM.init();
-  if (!cfgLoad()) cfgDefaults();
+  cfgDefaults();
 
   USBComposite.setProductString("BluePill MIDI Trigger");
   midi.registerComponent();
   CompositeSerial.registerComponent();
   USBComposite.begin();
-  delay(2000);  // tempo para o host enumerar o dispositivo
+  delay(2000);
+
+  // EEPROM após USB enumerar — flash erase não pode ocorrer durante enumeração
+  // (handler USB está em flash e fica inacessível durante PER no STM32F1)
+  // Páginas nos últimos 2KB dos 128KB reais: fora do binário (~84KB)
+  EEPROM.PageBase0 = 0x0801F800;
+  EEPROM.PageBase1 = 0x0801FC00;
+  EEPROM.PageSize  = 0x400;
+  EEPROM.init();
+  if (!cfgLoad()) cfgDefaults();
+
+  // 3 piscadas confirmam que setup() terminou
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(PC13, LOW);  delay(120);
+    digitalWrite(PC13, HIGH); delay(80);
+  }
 }
 
 void loop() {
@@ -195,7 +211,7 @@ void loop() {
 
   for (int i = 0; i < NUM_PADS; i++) {
     Pad &p = pads[i];
-    const uint16 v = analogRead(PAD_PIN[i]);  // 12 bits: 0..4095
+    const uint16 v = analogRead(PAD_PIN[i]);
 
     switch (p.state) {
 
@@ -217,7 +233,7 @@ void loop() {
           p.state        = MASKED;
           p.tMaskStartMs = nowMs;
 
-          digitalWrite(PC13, LOW);          // pisca o LED no hit
+          digitalWrite(PC13, LOW);
           ledOffAtMs = nowMs + 30;
 
           if (monitor) {
@@ -237,7 +253,7 @@ void loop() {
           midi.sendNoteOff(cfg.channel, cfg.note[i], 0);
           p.noteOn = false;
         }
-        if ((uint32)(nowMs - p.tMaskStartMs) >= cfg.maskMs && v < cfg.th[i]) {
+        if ((uint32)(nowMs - p.tMaskStartMs) >= cfg.maskMs && v < cfg.th[i] && !p.noteOn) {
           p.state = IDLE;
         }
         break;
@@ -247,5 +263,15 @@ void loop() {
   if (ledOffAtMs && (int32)(nowMs - ledOffAtMs) >= 0) {
     digitalWrite(PC13, HIGH);
     ledOffAtMs = 0;
+  }
+
+  // Heartbeat: 50ms a cada 1s quando sem flash de hit ativo
+  if (ledOffAtMs == 0) {
+    if (nowMs - lastHbMs >= 1000) {
+      digitalWrite(PC13, LOW);
+      lastHbMs = nowMs;
+    } else if (nowMs - lastHbMs >= 50) {
+      digitalWrite(PC13, HIGH);
+    }
   }
 }

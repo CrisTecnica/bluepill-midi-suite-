@@ -51,6 +51,7 @@ export default function App() {
   const toastTimer = useRef<number>(0);
   const cfgReceived = useRef(false);
   const getRetryTimer = useRef<number>(0);
+  const monRetryTimer = useRef<number>(0);
 
   const showToast = useCallback((msg: string, duration = 2500) => {
     setToast(msg);
@@ -88,6 +89,7 @@ export default function App() {
 
       if (obj.e === "hit" && typeof obj.p === "number") {
         const p = obj.p as number;
+        if (p < 0 || p >= NUM_PADS) return;
         setHits((h) => {
           const n = [...h];
           n[p] = { peak: obj.peak, vel: obj.vel };
@@ -125,14 +127,24 @@ export default function App() {
       if (obj.ok === "saved") {
         showToast("Configuração salva na flash da placa");
       }
+      if (obj.err === "flash") {
+        showToast("Erro: falha ao gravar na flash — tente novamente", 4000);
+      }
     });
 
-    const unClosed = listen("serial-closed", () => setConnected(false));
+    const unClosed = listen("serial-closed", () => {
+      setConnected(false);
+      setCfg(null);
+      setHits(Array(NUM_PADS).fill(null));
+      setMeters(Array(NUM_PADS).fill(0));
+      setFlash(Array(NUM_PADS).fill(false));
+    });
 
     return () => {
       unLine.then((f) => f());
       unClosed.then((f) => f());
       window.clearTimeout(getRetryTimer.current);
+      window.clearTimeout(monRetryTimer.current);
     };
   }, []);
 
@@ -152,6 +164,8 @@ export default function App() {
       getRetryTimer.current = window.setTimeout(() => {
         if (!cfgReceived.current) send("GET");
       }, 800);
+      window.clearTimeout(monRetryTimer.current);
+      monRetryTimer.current = window.setTimeout(() => send("MON 1"), 2000);
     } catch (e) {
       showToast(`Falha ao conectar: ${e}`, 3500);
     }
@@ -251,7 +265,7 @@ export default function App() {
                   <label className="field">
                     <span>LIMIAR <b>{cfg.th[i]}</b></span>
                     <input
-                      type="range" min={10} max={4095} value={cfg.th[i]}
+                      type="range" min={0} max={4095} value={cfg.th[i]}
                       onChange={(e) => {
                         const v = Number(e.target.value);
                         setParam("TH", i, v, (c) => {
@@ -284,7 +298,7 @@ export default function App() {
             <label className="field">
               <span>CURVA <b>{(cfg.gamma / 100).toFixed(2)}</b></span>
               <input
-                type="range" min={20} max={200} value={cfg.gamma}
+                type="range" min={10} max={300} value={cfg.gamma}
                 onChange={(e) => {
                   const v = Number(e.target.value);
                   setParam("GAMMA", 0, v, (c) => ({ ...c, gamma: v }));
@@ -295,7 +309,7 @@ export default function App() {
             <label className="field">
               <span>MÁSCARA <b>{cfg.mask} ms</b></span>
               <input
-                type="range" min={5} max={200} value={cfg.mask}
+                type="range" min={1} max={1000} value={cfg.mask}
                 onChange={(e) => {
                   const v = Number(e.target.value);
                   setParam("MASK", 0, v, (c) => ({ ...c, mask: v }));
@@ -306,7 +320,7 @@ export default function App() {
             <label className="field">
               <span>JANELA <b>{cfg.scan} µs</b></span>
               <input
-                type="range" min={500} max={8000} step={100} value={cfg.scan}
+                type="range" min={200} max={20000} step={100} value={cfg.scan}
                 onChange={(e) => {
                   const v = Number(e.target.value);
                   setParam("SCAN", 0, v, (c) => ({ ...c, scan: v }));
@@ -317,7 +331,7 @@ export default function App() {
             <label className="field">
               <span>NOTA OFF <b>{cfg.len} ms</b></span>
               <input
-                type="range" min={10} max={300} value={cfg.len}
+                type="range" min={5} max={2000} value={cfg.len}
                 onChange={(e) => {
                   const v = Number(e.target.value);
                   setParam("LEN", 0, v, (c) => ({ ...c, len: v }));
@@ -328,7 +342,7 @@ export default function App() {
             <label className="field">
               <span>PICO MÁX <b>{cfg.pmax}</b></span>
               <input
-                type="range" min={500} max={4095} step={5} value={cfg.pmax}
+                type="range" min={200} max={4095} step={5} value={cfg.pmax}
                 onChange={(e) => {
                   const v = Number(e.target.value);
                   setParam("PMAX", 0, v, (c) => ({ ...c, pmax: v }));
