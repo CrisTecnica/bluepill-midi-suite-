@@ -439,6 +439,8 @@ Aparecem na parte inferior da tela por alguns segundos:
 | *Falha ao conectar: Permission denied* | Usuário não está no grupo `dialout` |
 | *Falha ao conectar: \<porta\>* | Porta não existe ou ocupada por outro processo |
 | *Erro ao salvar: \<detalhe\>* | Falha de comunicação ao tentar salvar |
+| *Placa não respondeu — verifique o cabo e tente reconectar* | Porta abriu mas firmware não respondeu ao GET em 8 s |
+| *Erro na porta serial: \<detalhe\>* | Driver serial reportou erro ao ler dados (ver log de diagnóstico) |
 
 ---
 
@@ -569,6 +571,24 @@ Se instalou o `.deb`, o postinst já faz isso automaticamente.
 
 - Clicar **Salvar na placa** é obrigatório — ajustes feitos no app ficam só na RAM
 - Se o toast de erro aparecer ao salvar, a EEPROM emulada pode estar com problema — tente uma vez mais
+
+### App fica em "Lendo configuração da placa…" (especialmente no Windows)
+
+**Sintoma:** a porta abre sem erro, mas a configuração nunca aparece.
+
+O painel agora exibe dois aids de diagnóstico:
+
+- **"Aguardando resposta da placa — enviando GET…"** → nenhum dado recebido ainda. Possíveis causas:
+  - O firmware ainda não terminou a enumeração USB (aguarde e tente **Desconectar → Conectar** novamente)
+  - Cabo sem fio de dados (tente outro)
+  - No Windows: driver USB CDC não instalado (verifique Gerenciador de Dispositivos)
+
+- **"DADOS RECEBIDOS (não reconhecidos como JSON válido):"** seguido do texto bruto → a porta está comunicando mas enviando dados fora do protocolo. Possíveis causas:
+  - Porta errada selecionada (outro dispositivo CDC na mesma COM)
+  - Firmware antigo ou corrompido — regrave com ST-Link
+  - No Windows: `\r\n` ou BOM inesperado — o app faz trim automaticamente, mas se o texto mostrar lixo, pode ser clonagem de cristal instável
+
+- **"Erro na porta serial: \<texto\>"** vermelho → o driver reportou falha ao ler. O erro exato está no texto (ex.: "Access denied", "The device does not exist", "I/O error"). Use esse texto para buscar solução específica.
 
 ### Double-trigger (nota dupla num hit)
 

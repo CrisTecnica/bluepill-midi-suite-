@@ -62,6 +62,10 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'BluePill MIDI Trigger ${{ github.ref_name }}'
           releaseBody: |
+            ## O que há de novo
+            - **Diagnóstico de conexão serial**: quando a placa não responde no Windows, o painel agora exibe os dados brutos recebidos pela porta serial e o erro real capturado pelo driver — facilitando identificar se é problema de driver, porta errada ou cabo.
+            - Erro real do reader thread agora aparece na interface (antes era descartado silenciosamente).
+
             ## Instalação
 
             ### Linux (.deb — Ubuntu/Debian/Pop!_OS)
