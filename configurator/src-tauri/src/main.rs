@@ -44,19 +44,22 @@ fn connect_port(
     }
     *state.writer.lock().unwrap() = None;
 
-    // dtr_on_open(true): sinaliza ao STM32 que o host está pronto.
-    // O USBCompositeSerial só processa dados quando DTR está alto;
-    // no Linux o driver faz isso automaticamente, no Windows precisamos
-    // pedir explicitamente — sem isso a placa nunca recebe o GET.
-    let sp = serialport::new(&port, 115_200)
+    // No Windows o cdc_acm não assert DTR automaticamente; o STM32
+    // (USBCompositeSerial) só processa dados quando DTR está alto, então
+    // precisamos pedi-lo explicitamente. No Linux o kernel já faz isso
+    // durante o open() — aplicar dtr_on_open lá causaria um segundo
+    // SET_CONTROL_LINE_STATE que pode confundir o firmware.
+    let builder = serialport::new(&port, 115_200)
         .timeout(Duration::from_millis(100))
         .data_bits(serialport::DataBits::Eight)
         .stop_bits(serialport::StopBits::One)
         .parity(serialport::Parity::None)
-        .flow_control(serialport::FlowControl::None)
-        .dtr_on_open(true)
-        .open()
-        .map_err(|e| e.to_string())?;
+        .flow_control(serialport::FlowControl::None);
+
+    #[cfg(target_os = "windows")]
+    let builder = builder.dtr_on_open(true);
+
+    let sp = builder.open().map_err(|e| e.to_string())?;
 
     let reader_sp = sp.try_clone().map_err(|e| e.to_string())?;
     let stop = Arc::new(AtomicBool::new(false));

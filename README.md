@@ -572,23 +572,29 @@ Se instalou o `.deb`, o postinst já faz isso automaticamente.
 - Clicar **Salvar na placa** é obrigatório — ajustes feitos no app ficam só na RAM
 - Se o toast de erro aparecer ao salvar, a EEPROM emulada pode estar com problema — tente uma vez mais
 
-### App fica em "Lendo configuração da placa…" (especialmente no Windows)
+### App fica em "Lendo configuração da placa…"
 
 **Sintoma:** a porta abre sem erro, mas a configuração nunca aparece.
 
-O painel agora exibe dois aids de diagnóstico:
+**Causa raiz:** o `USBCompositeSerial` do STM32 só processa dados recebidos quando o sinal DTR (Data Terminal Ready) está alto. O comportamento varia por plataforma:
 
-- **"Aguardando resposta da placa — enviando GET…"** → nenhum dado recebido ainda. Possíveis causas:
-  - O firmware ainda não terminou a enumeração USB (aguarde e tente **Desconectar → Conectar** novamente)
+| Plataforma | Comportamento do DTR |
+|---|---|
+| Linux | Driver `cdc_acm` assert DTR automaticamente no `open()` — funciona sem nenhuma ação extra |
+| Windows | O driver não assert DTR sozinho; o app faz isso explicitamente via `dtr_on_open(true)` |
+
+O painel exibe diagnósticos enquanto aguarda:
+
+- **"Aguardando resposta da placa — enviando GET…"** → nenhum dado recebido. Possíveis causas:
+  - No Windows: driver USB CDC não instalado — verifique Gerenciador de Dispositivos; deve aparecer como porta COM, não como dispositivo desconhecido
   - Cabo sem fio de dados (tente outro)
-  - No Windows: driver USB CDC não instalado (verifique Gerenciador de Dispositivos)
+  - Firmware não está rodando — verifique heartbeat do LED (pisca 1×/s)
 
-- **"DADOS RECEBIDOS (não reconhecidos como JSON válido):"** seguido do texto bruto → a porta está comunicando mas enviando dados fora do protocolo. Possíveis causas:
-  - Porta errada selecionada (outro dispositivo CDC na mesma COM)
+- **"DADOS RECEBIDOS (não reconhecidos como JSON válido):"** seguido do texto bruto → porta está comunicando mas protocolo não bate. Possíveis causas:
+  - Porta errada selecionada (outro dispositivo CDC)
   - Firmware antigo ou corrompido — regrave com ST-Link
-  - No Windows: `\r\n` ou BOM inesperado — o app faz trim automaticamente, mas se o texto mostrar lixo, pode ser clonagem de cristal instável
 
-- **"Erro na porta serial: \<texto\>"** vermelho → o driver reportou falha ao ler. O erro exato está no texto (ex.: "Access denied", "The device does not exist", "I/O error"). Use esse texto para buscar solução específica.
+- **"Erro na porta serial: \<texto\>"** em vermelho → erro reportado pelo driver. Use o texto exato (ex.: "Access denied", "I/O error") para buscar solução específica.
 
 ### Double-trigger (nota dupla num hit)
 
