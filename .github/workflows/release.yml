@@ -64,18 +64,44 @@ jobs:
           releaseBody: |
             ## Instalação
 
-            ### Linux
-            - **`.deb`** (Ubuntu/Debian): `sudo dpkg -i bluepill-midi-trigger_*.deb`
-              - Instala udev rule e adiciona usuário ao grupo `dialout` automaticamente
-            - **`.AppImage`**: torne executável e abra — sem instalação necessária
-              - Permissão manual: `sudo usermod -aG dialout $USER` + logout/login
+            ### Linux (.deb — Ubuntu/Debian/Pop!_OS)
+            ```bash
+            sudo dpkg -i BluePill.MIDI.Trigger_*_amd64.deb
+            sudo udevadm control --reload-rules && sudo udevadm trigger
+            ```
+            Desplugue e replugue o cabo USB da BluePill — pronto, sem relogar.
+
+            ### Linux (.AppImage)
+            ```bash
+            chmod +x BluePill.MIDI.Trigger_*.AppImage
+            ./BluePill.MIDI.Trigger_*.AppImage
+            ```
 
             ### Windows
-            - **`.msi`** ou **`.exe`**: execute como Administrador
-              - Instala driver USB CDC (se necessário) e cria atalho na área de trabalho
+            Execute `BluePill.MIDI.Trigger_*_x64-setup.exe` como Administrador.
+            Cria atalho na Área de Trabalho automaticamente.
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: false
+
+      - name: Inject postinst into .deb (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          DEB=$(find configurator/src-tauri/target -name "*.deb" | grep -v ".sig" | head -1)
+          echo "Patching: $DEB"
+          WORKDIR=$(mktemp -d)
+          dpkg-deb -R "$DEB" "$WORKDIR"
+          install -m 755 configurator/src-tauri/linux/postinst "$WORKDIR/DEBIAN/postinst"
+          dpkg-deb -b "$WORKDIR" "$DEB"
+          echo "Patched .deb with postinst"
+
+      - name: Upload patched .deb to release
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          DEB=$(find configurator/src-tauri/target -name "*.deb" | grep -v ".sig" | head -1)
+          gh release upload ${{ github.ref_name }} "$DEB" --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Tauri app (Windows)
         if: matrix.platform == 'windows-latest'
@@ -90,7 +116,7 @@ jobs:
           releaseBody: |
             ## Instalação Windows
             Execute o instalador `.exe` ou `.msi` como Administrador.
-            Cria atalho na área de trabalho e menu iniciar automaticamente.
+            Cria atalho na Área de Trabalho e Menu Iniciar automaticamente.
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: false
