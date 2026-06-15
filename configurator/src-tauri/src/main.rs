@@ -46,6 +46,10 @@ fn connect_port(
 
     let sp = serialport::new(&port, 115_200)
         .timeout(Duration::from_millis(100))
+        .data_bits(serialport::DataBits::Eight)
+        .stop_bits(serialport::StopBits::One)
+        .parity(serialport::Parity::None)
+        .flow_control(serialport::FlowControl::None)
         .open()
         .map_err(|e| e.to_string())?;
 
