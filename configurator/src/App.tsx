@@ -52,6 +52,7 @@ export default function App() {
   const cfgReceived = useRef(false);
   const getRetryTimer = useRef<number>(0);
   const monRetryTimer = useRef<number>(0);
+  const connectTimeoutTimer = useRef<number>(0);
 
   const showToast = useCallback((msg: string, duration = 2500) => {
     setToast(msg);
@@ -83,6 +84,8 @@ export default function App() {
       if (Array.isArray(obj.th)) {
         cfgReceived.current = true;
         window.clearTimeout(getRetryTimer.current);
+        window.clearTimeout(monRetryTimer.current);
+        window.clearTimeout(connectTimeoutTimer.current);
         setCfg(obj as Config);
         return;
       }
@@ -145,6 +148,7 @@ export default function App() {
       unClosed.then((f) => f());
       window.clearTimeout(getRetryTimer.current);
       window.clearTimeout(monRetryTimer.current);
+      window.clearTimeout(connectTimeoutTimer.current);
     };
   }, []);
 
@@ -158,14 +162,30 @@ export default function App() {
       await invoke("connect_port", { port });
       cfgReceived.current = false;
       setConnected(true);
-      send("MON 1");
-      send("GET");
-      window.clearTimeout(getRetryTimer.current);
-      getRetryTimer.current = window.setTimeout(() => {
-        if (!cfgReceived.current) send("GET");
-      }, 800);
-      window.clearTimeout(monRetryTimer.current);
-      monRetryTimer.current = window.setTimeout(() => send("MON 1"), 2000);
+
+      // Envia GET e MON 1 com retries — Windows pode demorar mais para o
+      // firmware responder (USB CDC ainda inicializando no STM32)
+      const sendWithRetries = () => {
+        send("MON 1");
+        send("GET");
+        window.clearTimeout(getRetryTimer.current);
+        getRetryTimer.current = window.setTimeout(() => {
+          if (!cfgReceived.current) { send("MON 1"); send("GET"); }
+        }, 1000);
+        window.clearTimeout(monRetryTimer.current);
+        monRetryTimer.current = window.setTimeout(() => {
+          if (!cfgReceived.current) { send("MON 1"); send("GET"); }
+        }, 2500);
+      };
+      sendWithRetries();
+
+      // Timeout de 8s: se não recebeu config, informa ao usuário
+      window.clearTimeout(connectTimeoutTimer.current);
+      connectTimeoutTimer.current = window.setTimeout(() => {
+        if (!cfgReceived.current) {
+          showToast("Placa não respondeu — verifique o cabo e tente reconectar", 5000);
+        }
+      }, 8000);
     } catch (e) {
       showToast(`Falha ao conectar: ${e}`, 3500);
     }
@@ -173,6 +193,8 @@ export default function App() {
 
   const disconnect = async () => {
     window.clearTimeout(getRetryTimer.current);
+    window.clearTimeout(monRetryTimer.current);
+    window.clearTimeout(connectTimeoutTimer.current);
     send("MON 0");
     await invoke("disconnect_port").catch(() => {});
     setConnected(false);
