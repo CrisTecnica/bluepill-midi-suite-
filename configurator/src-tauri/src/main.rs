@@ -62,6 +62,7 @@ fn connect_port(
     std::thread::spawn(move || {
         let mut reader = BufReader::new(reader_sp);
         let mut line = String::new();
+        let mut last_error: Option<String> = None;
         while !stop.load(Ordering::Relaxed) {
             line.clear();
             match reader.read_line(&mut line) {
@@ -73,10 +74,16 @@ fn connect_port(
                     }
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => continue,
-                Err(_) => break,
+                Err(e) => {
+                    last_error = Some(e.to_string());
+                    break;
+                }
             }
         }
         if !stop.load(Ordering::Relaxed) {
+            if let Some(err) = last_error {
+                let _ = app.emit("serial-error", err);
+            }
             let _ = app.emit("serial-closed", ());
         }
     });

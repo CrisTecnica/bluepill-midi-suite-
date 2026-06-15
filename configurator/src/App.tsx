@@ -44,6 +44,8 @@ export default function App() {
   const [meters, setMeters] = useState<number[]>(Array(NUM_PADS).fill(0));
   const [flash, setFlash] = useState<boolean[]>(Array(NUM_PADS).fill(false));
   const [toast, setToast] = useState("");
+  const [rawLog, setRawLog] = useState<string[]>([]);
+  const [serialError, setSerialError] = useState<string>("");
 
   const meterTimers = useRef<number[]>([]);
   const flashTimers = useRef<number[]>([]);
@@ -78,6 +80,9 @@ export default function App() {
       try {
         obj = JSON.parse(ev.payload);
       } catch {
+        if (!cfgReceived.current) {
+          setRawLog((prev) => [...prev.slice(-14), ev.payload]);
+        }
         return;
       }
 
@@ -86,6 +91,8 @@ export default function App() {
         window.clearTimeout(getRetryTimer.current);
         window.clearTimeout(monRetryTimer.current);
         window.clearTimeout(connectTimeoutTimer.current);
+        setRawLog([]);
+        setSerialError("");
         setCfg(obj as Config);
         return;
       }
@@ -138,19 +145,27 @@ export default function App() {
     const unClosed = listen("serial-closed", () => {
       setConnected(false);
       setCfg(null);
+      setRawLog([]);
+      setSerialError("");
       setHits(Array(NUM_PADS).fill(null));
       setMeters(Array(NUM_PADS).fill(0));
       setFlash(Array(NUM_PADS).fill(false));
     });
 
+    const unError = listen<string>("serial-error", (ev) => {
+      setSerialError(ev.payload);
+      showToast(`Erro na porta serial: ${ev.payload}`, 6000);
+    });
+
     return () => {
       unLine.then((f) => f());
       unClosed.then((f) => f());
+      unError.then((f) => f());
       window.clearTimeout(getRetryTimer.current);
       window.clearTimeout(monRetryTimer.current);
       window.clearTimeout(connectTimeoutTimer.current);
     };
-  }, []);
+  }, [showToast]);
 
   const send = useCallback((line: string) => {
     invoke("send_line", { line }).catch(() => {});
@@ -161,6 +176,8 @@ export default function App() {
     try {
       await invoke("connect_port", { port });
       cfgReceived.current = false;
+      setRawLog([]);
+      setSerialError("");
       setConnected(true);
 
       // Envia GET e MON 1 com retries — Windows pode demorar mais para o
@@ -199,6 +216,8 @@ export default function App() {
     await invoke("disconnect_port").catch(() => {});
     setConnected(false);
     setCfg(null);
+    setRawLog([]);
+    setSerialError("");
     setHits(Array(NUM_PADS).fill(null));
     setMeters(Array(NUM_PADS).fill(0));
     setFlash(Array(NUM_PADS).fill(false));
@@ -257,7 +276,24 @@ export default function App() {
         </div>
       )}
 
-      {connected && !cfg && <div className="empty"><p>Lendo configuração da placa…</p></div>}
+      {connected && !cfg && (
+        <div className="empty">
+          <p>Lendo configuração da placa…</p>
+          {serialError && (
+            <p className="serial-error">Erro na porta: {serialError}</p>
+          )}
+          {rawLog.length > 0 ? (
+            <div className="serial-log">
+              <p className="serial-log-title">DADOS RECEBIDOS (não reconhecidos como JSON válido):</p>
+              {rawLog.map((ln, i) => (
+                <code key={i} className="serial-raw-line">{ln}</code>
+              ))}
+            </div>
+          ) : (
+            <p className="dim">Aguardando resposta da placa — enviando GET…</p>
+          )}
+        </div>
+      )}
 
       {connected && cfg && (
         <>
