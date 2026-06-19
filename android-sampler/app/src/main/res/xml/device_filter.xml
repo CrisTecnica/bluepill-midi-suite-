@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Leaflabs/Maple VID usado pelo STM32duino USBComposite -->
+    <usb-device vendor-id="7855" />
+    <!-- STMicroelectronics VID (fallback) -->
+    <usb-device vendor-id="1155" />
+</resources>
